@@ -10,7 +10,7 @@
 
 ## 建立项目
 打开pycharm在里面建立一个flask项目,解释器要选择自己创建的虚拟环境中的python  
-显示图片first  
+![](https://github.com/codeconveyer/flask/raw/main/picture/first.png)  
 这样我们的一个最基本的flask项目就建立好了,默认端口是5000。可以通过在`app.run(debug,port)`进行配置修改端口和开启调试模式。  
 可以通过修改configurations或者在控制台中输入`python xx.py`启动项目。  
 这样看我们的flask项目建立非常简单,但是将方法、配置与启动放在一起总会显得臃肿。项目中最好是将不同功能放入不同包中,所以我们需要对项目进行整理。
@@ -30,7 +30,7 @@ manager.run()
 - utils 工具  
 
 而我们也需要将方法,设置等放入不同的py文件中,manage.py放置在最外面  
-显示图片easyframe  
+![](https://github.com/codeconveyer/flask/raw/main/picture/easyframe.png)  
 当然这只是一个简单的架构,各位可以自行斟酌自己的架构,思想是自由的。
 
 ## 数据库的使用
@@ -62,23 +62,23 @@ def init_ext(app):
 - 通过上述的步骤,我们就可以在自己的flask项目中使用自己的数据库了。但是这样的配置也是不够好的,因为我们有时会需要用redis来作为我们的数据存储,这样我们又会多几行`app.config`字段,所以我们可以将这些config也放入一个包中,在这个包中建一个类  
 
 ```
-class Config
-	SQLALCHEMY_DATABASE_URI = SQLALCHEMY_DATABASE_URI
+class Config:
+    SQLALCHEMY_DATABASE_URI = SQLALCHEMY_DATABASE_URI
     SQLALCHEMY_TRACK_MODIFICATIONS = False
-	密钥
-	SECRET_KEY
-	使用redis,默认127.0.0.1：6379
-	SESSION_TYPE = "redis"
-	修改访问地址
-	SESSION_REDIS = redis.Redis(host=,port=)
-	定义前缀
-	SESSION_KEY_PREFIX = "flask"
+    # 密钥
+    SECRET_KEY = ""
+    # 使用redis,默认127.0.0.1：6379
+    SESSION_TYPE = "redis"
+    # 修改访问地址
+    SESSION_REDIS = redis.Redis(host="",port="")
+    # 定义前缀
+    SESSION_KEY_PREFIX = 'flask'
 ```  
 
 之后只需要在create_app(config)函数中通过`app.config.from_object(config)`就可以正常加载设置了。
 
 ## views的管理
-- 一个项目中往往不只有一个app,那么要对着不同app下的views进行管理的话,就需要用到这里的`Blueprint`了,可以直接重flask重导入
+- 一个项目中往往不只有一个app,那么要对着不同app下的views进行管理的话,就需要用到这里的`Blueprint`了,可以直接从flask重导入
 
 ```
 from flask import Blueprint
@@ -130,5 +130,5 @@ def drop_db():
     return '删除成功'
 
 ```
-- 之后运行项目,进入createdb方法,会显示出#创建成功#的页面,这是再访问自己的数据库,会发现表被创建了  
-显示图model
+- 之后运行项目,进入createdb方法,会显示出*创建成功*的页面,这是再访问自己的数据库,会发现表被创建了  
+![](https://github.com/codeconveyer/flask/raw/main/picture/model.png)
