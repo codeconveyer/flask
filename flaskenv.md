@@ -89,6 +89,22 @@ return 'hello world'
 ```
 
 - 注册蓝图`app.register_blueprint(blueprint=stu, url_prefix='/stu')`这样就可以使用方法了。
+- 依次进行创建,create_app函数最终如下
+![](https://github.com/codeconveyer/flask/raw/main/picture/main.png)
+- 最后在`manage.py`中使用Manager进行管理即可  
+```python
+from flask_script import Manager
+from Base.main import create_app
+from Base.config import Config
+
+
+app = create_app(app)
+manager = Manager(app=app)
+
+
+if __name__ == '__main__':
+    manager.run()
+```
 
 ## 一个简单的创建
 - 在models中
