@@ -2,7 +2,7 @@
 
 ### 基本的数据操作
 - 正如我上篇文章中创建的stu表,其中有s_id、s_name、s_age等字段,我需要插入一些数据进去  
-插入图片basefield  
+![](https://github.com/codeconveyer/flask/raw/main/picture/basefield.png)
 ```python
 stu.route('/addstu/')
 def add_stu():
@@ -19,7 +19,7 @@ db.session.execute(sql)
 db.session.commit()
 ```
 这样也可以创建一条数据,而且可以通过sql的多条插入来实现。那么怎么通过原始方法来写呢?我认为将要写的值放入列表,遍历进行添加也是可以的,但是毫无疑问效率是个问题,这就需要在model中加入一个魔法方法,还有`db.session.add_all()`来实现了。首先我来改一下模型吧  
-插入图片newmodel  
+![](https://github.com/codeconveyer/flask/raw/main/picture/newmodel.png)  
 通过建立一个基础类定义一个共有字段,其他建立的类继承这个类的字段和方法,就跟python的父类、子类之间的继承差不多。通过这个方式创建,我们就可以通过如下方法进行字段数据的修改、插入了  
 ```python
 stu_dict = {
