@@ -44,7 +44,12 @@ for key in stu_dict.keys():
 db.session.add_all(stu_list)
 db.session.commit()
 ```  
-`add_all()`支持添加一组数据  
+`add_all()`支持添加一组数据。不知道各位在开发过程中有没有遇到添加的字段不确定的情况,如果遇到这种情况,你当然可以在方法里面定义所有字段的默认值,有就更新,这种当然可以;但是通过`.key`用key来动态的替换是不能实现的,所以我们可以使用`__dict__.update`的方法来实现,例如:
+```python
+data = {"s_name": "今"}
+stu = Student()
+stu.__dict__.update(data)
+```
 - 查询数据的方式和django中的查询语句出入不大
 	- filter查询  
 	`stus = Student.query.filter(Student.s_sex == 1)`
@@ -53,7 +58,7 @@ db.session.commit()
 	- get查询,只能索引主键
 	`stu = Student.query.get(1)`
 	- 在查询时,也可以通过and_或者or_来进行条件的筛选
-	`stus = Student.query.filter(and_(Student.s_sex == 1, Student.s_name == "诸葛亮"))`这样筛选出来的是同时满足这两个条件的数据  
+	`stus = Student.query.filter(and_(Student.s_sex == 1, Student.s_name == "诸葛亮"))`这样筛选出来的是同时满足这两个条件的数据,and_只支持等值判断  
 	`stus = Student.query.filter(or_(Student.s_age == 18, Student.s_name == "黄月英"))`这样只要是满足其中一个条件的数据就会被筛选出来  
 	但是or_和and_只支持filter不支持filter_by
 - 修改数据
@@ -68,12 +73,24 @@ db.session.commit()
 	Student.query.filter(Student.s_sex == 1).update({'s_sex': 1})  
 	db.session.commit()
 	```
-- 删除数据 
+- 删除数据
 ```python
 stu = Student.query.get(1)
 db.session.delete(stu)
 db.session.commit()
 ```
+- 对于数据库对象的显示  
+对于python中的类,它们(我也不确定是不是所有)都拥有一个魔法方法`__dict__`,这个方法会将这个类的属性,方法之类的信息以字典的形式展现出来,而这里我们建模型的类也是有这个方法的。所以,这就为我们想要输出某个数据库的所有信息的时候提供了便利的方法:  
+```python
+students = Student.query
+stu_list = []
+for student in students:
+    dic = dict(student.__dict__)
+		dic.pop("_sa_instance_state", None)
+		stu_list.append(student)
+return stu_list
+```
+一开始的query并没有操数据库,直到for循环才查询数据库信息。dict的作用相当于深拷贝,新建了一个地址存放并引向该地址。数据库对象的`__dict__`中会有全部的字段信息,同时还有个`_sa_instance_state`表明他是个sqlalchemy对象,所以如果直接对该对象pop的话可能会造成之后的关联无法建立的错误。
 ### 关联数据库
 - 一对一、一对多关联
 	- 一般是在一表中加入`info = db.relationship('StuInfo', backref='student')`  
@@ -95,7 +112,7 @@ db.session.commit()
 	```python
 	sc = db.Table('sc', db.Column('s_id', db.Integer, db.ForeignKey('stu.id')),
 				db.Column('c_id',db.Integer, db.ForeignKey('cou.id'))
-	```	
+	```
 	此外,我们还需要在这两个表中的任意一个中插入一条关系语句  
 	`stu = db.relationship('Student', secondary=sc, backref='course')`
 	这样我们就成功地建立了多对多关联,这里的secondary就是指定了关联关系表,而关联关系就是在sc表中建立的,如果不写secondary是不能建立多对多关联的,插入数据时会报错。
@@ -116,4 +133,6 @@ db.session.commit()
     db.session.add(cou)
     db.session.commit()
 	```
-	这样就会在建立的第三个库中建立数据,而且stu和cou的关联也建立好了
+	这样就会在建立的第三个库中建立数据,而且stu和cou的关联也建立好了。
+	- 对关联数据库的建议  
+	如果有条件的话,个人建议最好是不要建立关联。外键的作用往往是起到约束作用,同时可以节省空间,同时也有句名言--空间与时间不可能同时达到最佳。所以你选择了外键,那么你必然是要牺牲时间了,而且,约束越多,数据库的关联越深,数据插入就越需要谨慎,既然是项目那么你就需要严谨的校验参数。这只是个人看法,一百个人眼里有一百个哈姆雷特。

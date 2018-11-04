@@ -148,3 +148,159 @@ def drop_db():
 ```
 - 之后运行项目,进入createdb方法,会显示出*创建成功*的页面,这是再访问自己的数据库,会发现表被创建了  
 ![](https://github.com/codeconveyer/flask/raw/main/picture/model.png)
+
+### flask默认session的安全问题
+使用过flask进行项目开发的人应该知道,它自带的session是存放在客户端,用户浏览器中的cookie里面的。我们还是先看看falsk是如何对session进行处理的吧
+```python
+class SecureCookieSessionInterface(SessionInterface):
+    """The default session interface that stores sessions in signed cookies
+    through the :mod:`itsdangerous` module.
+    """
+    #: the salt that should be applied on top of the secret key for the
+    #: signing of cookie based sessions.
+    salt = 'cookie-session'
+    #: the hash function to use for the signature.  The default is sha1
+    digest_method = staticmethod(hashlib.sha1)
+    #: the name of the itsdangerous supported key derivation.  The default
+    #: is hmac.
+    key_derivation = 'hmac'
+    #: A python serializer for the payload.  The default is a compact
+    #: JSON derived serializer with support for some extra Python types
+    #: such as datetime objects or tuples.
+    serializer = session_json_serializer
+    session_class = SecureCookieSession
+
+    def get_signing_serializer(self, app):
+        if not app.secret_key:
+            return None
+        signer_kwargs = dict(
+            key_derivation=self.key_derivation,
+            digest_method=self.digest_method
+        )
+        return URLSafeTimedSerializer(app.secret_key,
+				                              salt=self.salt,
+                                      serializer=self.serializer,
+                                      signer_kwargs=signer_kwargs)
+```
+从这段中可以看出,flask指定算法以及secret_key调用了`URLSafeTimedSerializer`类,那么这个类的作用是什么呢?我们需要再看一下
+```python
+class Signer(object):
+    # ...
+    def sign(self, value):
+        """Signs the given string."""
+        return value + want_bytes(self.sep) + self.get_signature(value)
+
+    def get_signature(self, value):
+        """Returns the signature for the given value"""
+        value = want_bytes(value)
+        key = self.derive_key()
+        sig = self.algorithm.get_signature(key, value)
+        return base64_encode(sig)
+
+
+class Serializer(object):
+    default_serializer = json
+    default_signer = Signer
+    # ....
+    def dumps(self, obj, salt=None):
+        """Returns a signed string serialized with the internal serializer.
+        The return value can be either a byte or unicode string depending
+        on the format of the internal serializer.
+        """
+        payload = want_bytes(self.dump_payload(obj))
+        rv = self.make_signer(salt).sign(payload)
+        if self.is_text_serializer:
+            rv = rv.decode('utf-8')
+        return rv
+
+    def dump_payload(self, obj):
+        """Dumps the encoded object. The return value is always a
+        bytestring. If the internal serializer is text based the value
+        will automatically be encoded to utf-8.
+        """
+        return want_bytes(self.serializer.dumps(obj))
+
+
+class URLSafeSerializerMixin(object):
+    """Mixed in with a regular serializer it will attempt to zlib compress
+    the string to make it shorter if necessary. It will also base64 encode
+    the string so that it can safely be placed in a URL.
+    """
+    def load_payload(self, payload):
+        decompress = False
+        if payload.startswith(b'.'):
+            payload = payload[1:]
+            decompress = True
+        try:
+            json = base64_decode(payload)
+        except Exception as e:
+            raise BadPayload('Could not base64 decode the payload because of '
+                'an exception', original_error=e)
+        if decompress:
+            try:
+                json = zlib.decompress(json)
+            except Exception as e:
+                raise BadPayload('Could not zlib decompress the payload before '
+                    'decoding the payload', original_error=e)
+        return super(URLSafeSerializerMixin, self).load_payload(json)
+
+    def dump_payload(self, obj):
+        json = super(URLSafeSerializerMixin, self).dump_payload(obj)
+        is_compressed = False
+        compressed = zlib.compress(json)
+        if len(compressed) < (len(json) - 1):
+            json = compressed
+            is_compressed = True
+        base64d = base64_encode(json)
+        if is_compressed:
+            base64d = b'.' + base64d
+        return base64d
+
+
+class URLSafeTimedSerializer(URLSafeSerializerMixin, TimedSerializer):
+    """Works like :class:`TimedSerializer` but dumps and loads into a URL
+    safe string consisting of the upper and lowercase character of the
+    alphabet as well as ``'_'``, ``'-'`` and ``'.'``.
+    """
+    default_serializer = compact_json
+```
+emmm~~说实话我没看懂,在网上查了许多资料,说是对session进行序列化的方法,主要分为了四步,如果有懂的请务必留言指教:
+1. json.dumps将对象转换成json字符串
+2. 如果数据压缩过后长度更短,则用zlib进行压缩
+3. 将数据进行base64编码
+4. 通过hmac算法计算数据的签名,将签名附在数据后,用'.'分割  
+
+其实通过这几步我们就知道flask只是对session进行了防篡改的操作,我们可以从客户端的cookie里面获取所有的session信息,而且如果使用的是session的默认处理,懂得源码的人完全是有可能破解session信息的。就例如我在网山寻找到的一段代代码(本人还是个菜鸟=-=)
+```python
+#!/usr/bin/env python3
+import sys
+import zlib
+from base64 import b64decode
+from flask.sessions import session_json_serializer
+from itsdangerous import base64_decode
+
+def decryption(payload):
+    payload, sig = payload.rsplit(b'.', 1)
+    payload, timestamp = payload.rsplit(b'.', 1)
+
+    decompress = False
+    if payload.startswith(b'.'):
+        payload = payload[1:]
+        decompress = True
+
+    try:
+        payload = base64_decode(payload)
+    except Exception as e:
+        raise Exception('Could not base64 decode the payload because of '
+                         'an exception')
+
+    if decompress:
+        try:
+            payload = zlib.decompress(payload)
+        except Exception as e:
+            raise Exception('Could not zlib decompress the payload before '
+                             'decoding the payload')
+
+    return session_json_serializer.loads(payload)
+```
+额,上述代码完全可以读取出session信息,所以这样是不安全的,但我们可以通过重写这里的方法,使我们的session不那么容易被别人破解,比如自己指定一个序列化方法。
